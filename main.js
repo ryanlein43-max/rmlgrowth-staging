@@ -229,7 +229,31 @@
     failed: "Your message did not go through. Please try again in a moment, or email us at "
   };
 
+  /* Spam checks. Conservative on purpose so real leads are never lost. */
+  var LOADED = Date.now();
+  var MIN_FILL_MS = 3000;
+  var TEMP_DOMAINS = ["notlettersmail.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamail.info",
+    "guerrillamail.net", "sharklasers.com", "grr.la", "10minutemail.com", "temp-mail.org", "tempmail.com",
+    "throwawaymail.com", "trashmail.com", "getnada.com", "dispostable.com", "maildrop.cc", "fakeinbox.com", "mailnesia.com"];
+  function tempEmail(v) {
+    var d = (v.split("@")[1] || "").toLowerCase();
+    return TEMP_DOMAINS.some(function (t) { return d === t || d.slice(-(t.length + 1)) === "." + t; });
+  }
+  function hasLetter(v) { return /[A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u0590-\u06FF\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(v); }
+  function gibberishName(v) {
+    return v.split(/[\s.,'\u2019]+/).some(function (w) {
+      var latin = w.replace(/[^A-Za-z]/g, "");
+      if (latin.length >= 5 && !/[aeiouy]/i.test(latin)) return true;      /* five or more letters, no vowel */
+      if (/[bcdfghjklmnpqrstvwxz]{6,}/i.test(latin)) return true;          /* six consonants in a row */
+      return (w.match(/[a-z][A-Z]/g) || []).length >= 3;                   /* random case, like hGtYkLmP */
+    });
+  }
+
   document.querySelectorAll("form[data-ajax-form]").forEach(function (form) {
+    /* The endpoint only exists once this script runs, so a plain POST of the page skips FormSubmit. */
+    var endpoint = "https://formsubmit.co/ajax/" + form.getAttribute("data-to") + "@" + form.getAttribute("data-host");
+    var token = String(LOADED) + Math.random().toString(36).slice(2);
+    form.setAttribute("data-token", token);
     var status = form.querySelector(".form-status");
     var submitBtn = form.querySelector('button[type="submit"]');
     var success = document.getElementById(form.getAttribute("data-success"));
@@ -258,7 +282,7 @@
         var v = (f.value || "").trim();
         var msg = "";
         if (f.required && !v) msg = MSG.required;
-        else if (v && f.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) msg = MSG.email;
+        else if (v && f.type === "email" && (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) || tempEmail(v))) msg = MSG.email;
         else if (v && f.type === "tel" && v.replace(/\D/g, "").length < 7) msg = MSG.phone;
         else if (v && f.type === "url" && !/^(https?:\/\/)?([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(\/\S*)?$/i.test(v)) msg = MSG.url;
         if (msg) { setError(f, msg); first = first || f; }
@@ -276,8 +300,17 @@
       var bad = validate();
       if (bad) { bad.focus(); return; }
 
+      /* Honeypot filled: act as if it worked and send nothing. */
       var honey = form.querySelector('input[name="_honey"]');
       if (honey && honey.value) { showSuccess(); return; }
+      /* Too fast, missing token, or a name with no letters or keyboard mash: send nothing and show the existing failure text. */
+      var full = form.querySelector('input[name="Full name"]');
+      var biz = form.querySelector('input[name="Business name"]');
+      var suspicious = Date.now() - LOADED < MIN_FILL_MS ||
+        form.getAttribute("data-token") !== token ||
+        (full && (!hasLetter(full.value) || gibberishName(full.value))) ||
+        (biz && biz.value.trim() && !hasLetter(biz.value));
+      if (suspicious) { showFailed(); return; }
 
       var data = new FormData(form);
       var key = "Services you are interested in";
@@ -288,7 +321,7 @@
       submitBtn.disabled = true;
       submitBtn.textContent = MSG.sending;
 
-      fetch(form.action, { method: "POST", headers: { Accept: "application/json" }, body: data })
+      fetch(endpoint, { method: "POST", headers: { Accept: "application/json" }, body: data })
         .then(function (res) {
           return res.json().catch(function () { return {}; }).then(function (j) {
             var ok = res.ok && j.success !== false && j.success !== "false";
@@ -296,16 +329,18 @@
           });
         })
         .then(showSuccess)
-        .catch(function () {
-          status.textContent = MSG.failed;
-          var a = document.createElement("a");
-          a.href = "mailto:" + EMAIL;
-          a.textContent = EMAIL;
-          status.appendChild(a);
-          status.appendChild(document.createTextNode("."));
-        })
+        .catch(showFailed)
         .then(function () { submitBtn.disabled = false; submitBtn.textContent = label; });
     });
+
+    function showFailed() {
+      status.textContent = MSG.failed;
+      var a = document.createElement("a");
+      a.href = "mailto:" + EMAIL;
+      a.textContent = EMAIL;
+      status.appendChild(a);
+      status.appendChild(document.createTextNode("."));
+    }
 
     function showSuccess() {
       form.hidden = true;
