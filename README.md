@@ -67,7 +67,7 @@ Spam protection (added Oct 20, 2026):
 * `_honey` honeypot (FormSubmit drops any submission where it has a value; main.js also stops it and shows the normal thank you).
 * `_blacklist` with a short list of spam phrases and throwaway mail domains. FormSubmit silently drops matching submissions.
 * The FormSubmit endpoint is built in main.js from `data-to` and `data-host` on the form, so the HTML has no endpoint for a plain POST.
-* Client checks in main.js: submits within 3 seconds of page load, a missing script token, a Full name with no letters or obvious keyboard mash (five or more letters with no vowel, six consonants in a row, or random case), and a Business name with no letters are not sent and show the existing failure text. Throwaway email domains (list in `TEMP_DOMAINS`) get the existing invalid email message.
+* Client checks in main.js: submits within 3 seconds of page load, a missing script token, a Full name with no letters or obvious keyboard mash (a word of five or more letters with no vowel, or random case such as three lower to upper switches in one word), and a Business name with no letters are not sent and show the existing failure text. Throwaway email domains (list in `TEMP_DOMAINS`) get the existing invalid email message.
 * `_captcha` stays false: FormSubmit's captcha is an interstitial page in the normal POST flow, and these forms use the AJAX endpoint.
 * Follow up: once Ryan confirms the FormSubmit activation email, swap `data-to`/`data-host` for the random string alias FormSubmit provides.
 

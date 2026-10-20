@@ -244,7 +244,6 @@
     return v.split(/[\s.,'\u2019]+/).some(function (w) {
       var latin = w.replace(/[^A-Za-z]/g, "");
       if (latin.length >= 5 && !/[aeiouy]/i.test(latin)) return true;      /* five or more letters, no vowel */
-      if (/[bcdfghjklmnpqrstvwxz]{6,}/i.test(latin)) return true;          /* six consonants in a row */
       return (w.match(/[a-z][A-Z]/g) || []).length >= 3;                   /* random case, like hGtYkLmP */
     });
   }
